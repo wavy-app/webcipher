@@ -2,6 +2,7 @@
 #[derive(Debug)]
 pub enum Error {
     invalid_uri,
+    invalid_algorithm,
     unable_to_fetch_keys { message: String },
     unrecognized_response { message: String },
     unable_to_verify_token { message: String },
@@ -9,6 +10,7 @@ pub enum Error {
     unrecognized_jws_type,
     no_kid_present,
     no_corresponding_kid_in_store,
+    unable_to_parse_kid_into_uuid,
 }
 
 impl From<hyper::Error> for Error {
@@ -38,5 +40,11 @@ impl From<jsonwebtoken::errors::Error> for Error {
         Self::unable_to_verify_token {
             message: e.to_string(),
         }
+    }
+}
+
+impl From<uuid::Error> for Error {
+    fn from(_: uuid::Error) -> Self {
+        Self::unable_to_parse_kid_into_uuid
     }
 }
