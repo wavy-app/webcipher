@@ -1,5 +1,5 @@
 [package]
-name = "jwk-registry"
+name = "webcipher"
 version = "0.1.0"
 edition = "2021"
 
@@ -18,3 +18,9 @@ hyper = { version = "0.14", features = ["full"] }
 http = "0.2.7"
 hyper-tls = "0.5.0"
 tokio = { version = "1.18.0", features = ["full"] }
+
+# partial derivations
+derivative = "2.2.0"
+
+# universally unique identifiers
+uuid = { version = "0.8.2", features = ["v4", "serde"] }
