@@ -258,7 +258,8 @@ async fn fetch(uri: http::Uri) -> prelude::Result<BTreeMap<String, Key>> {
 
 /// Compute the respective [`DecodingKey`] for each [`Key`].
 ///
-/// This function specifically uses the [`from_rsa_components`](`DecodingKey::from_rsa_components`) function.
+/// This function specifically uses the
+/// [`from_rsa_components`](`DecodingKey::from_rsa_components`) function.
 /// This is because we expect that the target is using "RSA" encryption scheme.
 fn attach_decoding_keys(
     key_map: BTreeMap<String, Key>,
