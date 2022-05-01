@@ -9,10 +9,13 @@
 //! ```
 //!
 //! Validation of a signed `JWT` is simply done by calling the
-//! [`decode`](`RemoteCache::decode`) function. ```no_run
+//! [`decode`](`RemoteCache::decode`) function.
+//!
+//! ```no_run
 //! let token = "a.b.c";
 //! let claims: jsonwebtoken::TokenData<MyClaims>=
-//! remote_cache.decode::<MyClaims>(token)?; ```
+//! remote_cache.decode::<MyClaims>(token)?;
+//! ```
 //!
 //! The fetched keys will be stored, as well as their expiry times.
 //! This can greatly improve performance by avoiding duplicate calls.
