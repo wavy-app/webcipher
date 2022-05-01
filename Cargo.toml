@@ -1,7 +1,15 @@
 [package]
 name = "webcipher"
 version = "0.1.0"
+authors = [
+    "Raunak Bhagat <rabhagat31@gmail.com>"
+]
 edition = "2021"
+license = "MIT"
+description = "JWT encryption/decryption algorithms + a JWK Store implementation (for caching and authentication/authorization optimizations)."
+repository = "https://github.com/wavy-app/webcipher"
+keywords = ["jwt", "jwks"]
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,10 +21,12 @@ jsonwebtoken = "8.1.0"
 serde = { version = "1.0.111", features = ["derive"] }
 serde_json = "1.0.79"
 
-chrono = "0.4.11"
+# network request operations
 hyper = { version = "0.14", features = ["full"] }
 http = "0.2.7"
 hyper-tls = "0.5.0"
+
+# async runtime
 tokio = { version = "1.18.0", features = ["full"] }
 
 # partial derivations
