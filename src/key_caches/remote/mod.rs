@@ -55,6 +55,7 @@ use std::collections::BTreeMap;
 use derivative::*;
 use hyper::Client;
 use hyper_tls::HttpsConnector;
+use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
 use serde::Deserialize;
@@ -135,7 +136,7 @@ impl RemoteCache {
     {
         let uri = String::from(uri).parse::<http::Uri>()?;
         let keys = fetch(uri.clone()).await?;
-        let keys = attach_decoding_keys(keys);
+        // let keys = attach_decoding_keys(keys);
 
         let store = Self { uri, keys };
 
@@ -151,7 +152,7 @@ impl RemoteCache {
     pub async fn refresh(&mut self) -> prelude::Result<()> {
         let Self { uri, .. } = self;
         let keys = fetch(uri.clone()).await?;
-        let keys = attach_decoding_keys(keys);
+        // let keys = attach_decoding_keys(keys);
 
         self.keys = keys;
 
@@ -209,7 +210,8 @@ impl RemoteCache {
     }
 }
 
-/// Fetches the according [`Key`]s from the given URI.
+/// Fetches the according [`Key`]s from the given URI and computes the
+/// respective [`DecodingKey`] for each [`Key`].
 ///
 /// The keys are unique by their `kid` (i.e., their Key-ID).
 /// Each JWT can be decrypted by a corresponding [`Key`] that has a matching
@@ -219,7 +221,13 @@ impl RemoteCache {
 /// This function filters out all keys which don't can't be serialized into a
 /// [`Key`]. Furthermore, this function also filters out all keys whose `kty !=
 /// "RSA"`. This includes valid keys which use a different encryption mechanism.
-async fn fetch(uri: http::Uri) -> prelude::Result<BTreeMap<String, Key>> {
+///
+/// This function specifically uses the
+/// [`from_rsa_components`](`DecodingKey::from_rsa_components`) function.
+/// This is because we expect that the target is using "RSA" encryption scheme.
+async fn fetch(
+    uri: http::Uri,
+) -> prelude::Result<BTreeMap<String, (Key, DecodingKey)>> {
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
     let mut response = client.get(uri).await?;
@@ -238,39 +246,34 @@ async fn fetch(uri: http::Uri) -> prelude::Result<BTreeMap<String, Key>> {
         .into_iter()
         .filter_map(|value| {
             serde_json::from_value::<Key>(value).ok().and_then(|key| {
-                let Key { kty, .. } = &key;
+                let Key {
+                    kty,
+                    alg,
+                    e,
+                    n,
+                    kid,
+                    ..
+                } = &key;
+
                 let kty = kty.to_lowercase();
                 match &*kty {
-                    "rsa" => Some(key),
-                    _ => None,
-                }
+                    "rsa" => (),
+                    _ => return None,
+                };
+
+                match alg {
+                    Some(Algorithm::RS256) => (),
+                    _ => return None,
+                };
+
+                let kid = kid.clone();
+
+                DecodingKey::from_rsa_components(n, e)
+                    .ok()
+                    .map(|decoding_key| (kid, (key, decoding_key)))
             })
         })
-        .map(|key| {
-            let Key { kid, .. } = &key;
-            let kid = kid.clone();
-            (kid, key)
-        })
-        .collect::<BTreeMap<String, Key>>();
+        .collect::<BTreeMap<String, (Key, DecodingKey)>>();
 
     Ok(keys)
-}
-
-/// Compute the respective [`DecodingKey`] for each [`Key`].
-///
-/// This function specifically uses the
-/// [`from_rsa_components`](`DecodingKey::from_rsa_components`) function.
-/// This is because we expect that the target is using "RSA" encryption scheme.
-fn attach_decoding_keys(
-    key_map: BTreeMap<String, Key>,
-) -> BTreeMap<String, (Key, DecodingKey)> {
-    key_map
-        .into_iter()
-        .filter_map(|(kid, key)| {
-            let Key { e, n, .. } = &key;
-            DecodingKey::from_rsa_components(n, e)
-                .ok()
-                .map(|decoding_key| (kid, (key, decoding_key)))
-        })
-        .collect()
 }

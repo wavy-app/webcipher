@@ -1,3 +1,4 @@
+use jsonwebtoken::Algorithm;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -6,7 +7,7 @@ pub struct Key {
     #[serde(default)]
     pub e: String,
     pub kty: String,
-    pub alg: Option<String>,
+    pub alg: Option<Algorithm>,
     #[serde(default)]
     pub n: String,
     pub kid: String,
