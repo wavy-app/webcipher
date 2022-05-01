@@ -64,6 +64,8 @@ use serde_json::Value;
 use crate::error::Error;
 use crate::key_caches::decrypt;
 use crate::key_caches::remote::key::Key;
+use crate::key_caches::remote::key::KeyType;
+use crate::key_caches::remote::key::Use;
 use crate::prelude;
 
 /// A refreshable key cache for remote keys used for JWT authentication.
@@ -183,7 +185,7 @@ impl RemoteCache {
         let selector = |kid: &String| {
             keys.get(&*kid)
                 .ok_or(Error::no_corresponding_kid_in_store)
-                .map(|(_, decoding_kid)| decoding_kid)
+                .map(|(_, decoding_key)| decoding_key)
         };
 
         decrypt(token, selector, None)
@@ -252,18 +254,23 @@ async fn fetch(
                     e,
                     n,
                     kid,
+                    r#use,
                     ..
                 } = &key;
 
-                let kty = kty.to_lowercase();
-                match &*kty {
-                    "rsa" => (),
+                match kty {
+                    KeyType::RSA => (),
                     _ => return None,
                 };
 
                 match alg {
                     Some(Algorithm::RS256) => (),
                     _ => return None,
+                };
+
+                match r#use {
+                    Use::sig => (),
+                    Use::enc => return None,
                 };
 
                 let kid = kid.clone();

@@ -1,5 +1,6 @@
 use jsonwebtoken::decode;
 use jsonwebtoken::decode_header;
+use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::Header;
 use jsonwebtoken::TokenData;
@@ -25,6 +26,11 @@ where
     let token: String = token.into();
     let Header { typ, alg, kid, .. } = decode_header(&token)?;
 
+    match alg {
+        Algorithm::RS256 => (),
+        _ => Err(Error::invalid_algorithm)?,
+    };
+
     let validation = validation.unwrap_or(Validation::new(alg));
 
     let _ = typ
@@ -34,6 +40,7 @@ where
             _ => None,
         })
         .ok_or(Error::unrecognized_jws_type)?;
+
     let kid = kid.ok_or(Error::no_kid_present)?;
 
     let decoding_key = selector(&kid)?;
