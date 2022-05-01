@@ -1,4 +1,4 @@
-//! A semi-incomplete representations of `JWK`'s, as according to [RFC7517](https://datatracker.ietf.org/doc/html/rfc7517).
+//! An incomplete representations of `JWK`'s, as according to [RFC7517](https://datatracker.ietf.org/doc/html/rfc7517).
 //!
 //! `JWK`'s are used to validate `JWT`'s that are sent by some client.
 //!
@@ -18,17 +18,21 @@
 use jsonwebtoken::Algorithm;
 use serde::Deserialize;
 
-/// A representation of a [`Key`] struct.
+/// An incomplete representation of a `JWK`.
 ///
-/// This representation is incomplete, and furthermore, requires that certain
-/// fields be present whereas the RFC does not. This is because this
-/// representation of [`Key`] has been fine-tuned to specifically work for
-/// `OAuth2` `JWT`s.
+/// This representation is incomplete.
+/// Namely, there exist fields in the RFC which are not present in [`Key`].
+/// Furthermore, [`Key`] requires that certain fields be mandatory whereas the
+/// RFC requires them to be optional.
+/// This is because this representation of [`Key`] has been fine-tuned to
+/// specifically work for `OAuth2` `JWT`s.
 ///
-/// Other forms are accepted.
+/// However, with that being said, all the fields in [`Key`] are as stated by
+/// the RFC.
+///
 /// This is a reasonable restriction since most `OAuth2` service providers use
 /// `RSA` encryption using an exponent (i.e., the `e` field) and a modulus
-/// (i.e., the `n` field) in the [`Key`].
+/// (i.e., the `n` field).
 #[derive(Hash, Debug, Deserialize, PartialEq, Eq)]
 pub struct Key {
     #[serde(default)]
@@ -44,6 +48,7 @@ pub struct Key {
 /// All possible key-types as stated by the RFC.
 ///
 /// This enumeration is fully complete.
+///
 /// Namely, all variants declared in this enum are mentioned in the RFC and all
 /// variants mentioned in the RFC are declared in this enum.
 ///
@@ -54,6 +59,14 @@ pub enum KeyType {
     EC,
 }
 
+/// All possible uses as stated by the RFC.
+///
+/// This enumeration is fully complete.
+///
+/// Namely, all variants declared in this enum are mentioned in the RFC and all
+/// variants mentioned in the RFC are declared in this enum.
+///
+/// Note that [`super::RemoteCache`] still expects [`Use::sig`] only.
 #[allow(non_camel_case_types)]
 #[derive(Hash, Debug, Deserialize, PartialEq, Eq)]
 pub enum Use {
