@@ -7,10 +7,15 @@ pub enum Error {
     unrecognized_response { message: String },
     unable_to_verify_token { message: String },
     invalid_token,
-    unrecognized_jws_type,
+    unrecognized_jwt_type,
     no_kid_present,
     no_corresponding_kid_in_store,
     unable_to_parse_kid_into_uuid,
+    no_cache_control,
+    no_max_age,
+    unable_to_parse_headers,
+    stale_cache,
+    unrecognized_tpa,
 }
 
 impl From<hyper::Error> for Error {
@@ -46,5 +51,11 @@ impl From<jsonwebtoken::errors::Error> for Error {
 impl From<uuid::Error> for Error {
     fn from(_: uuid::Error) -> Self {
         Self::unable_to_parse_kid_into_uuid
+    }
+}
+
+impl From<http::header::ToStrError> for Error {
+    fn from(_: http::header::ToStrError) -> Self {
+        Self::unable_to_parse_headers
     }
 }

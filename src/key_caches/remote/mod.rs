@@ -9,10 +9,13 @@
 //! ```
 //!
 //! Validation of a signed `JWT` is simply done by calling the
-//! [`decode`](`RemoteCache::decode`) function. ```no_run
+//! [`decrypt`](`RemoteCache::decrypt`) function.
+//!
+//! ```no_run
 //! let token = "a.b.c";
 //! let claims: jsonwebtoken::TokenData<MyClaims>=
-//! remote_cache.decode::<MyClaims>(token)?; ```
+//! remote_cache.decrypt::<MyClaims>(token)?;
+//! ```
 //!
 //! The fetched keys will be stored, as well as their expiry times.
 //! This can greatly improve performance by avoiding duplicate calls.
@@ -24,14 +27,14 @@
 //! let token1 = "a.b.c";
 //! // this will not perform a network request
 //! let claims1: jsonwebtoken::TokenData<MyClaims> =
-//! remote_cache.decode::<MyClaims>(token)?;
+//! remote_cache.decrypt::<MyClaims>(token)?;
 //!
-//! // perform an arbitrary number of calls to decode...
+//! // perform an arbitrary number of calls to decrypt...
 //!
 //! let token_n = "e.f.g";
 //! // this will also not perform a network request
 //! let claims_n: jsonwebtoken::TokenData<MyClaims>=
-//! remote_cache.decode::<MyClaims>(token)?;
+//! remote_cache.decrypt::<MyClaims>(token)?;
 //!
 //! // this will perform a network request
 //! remote_cache.refresh().await?;
@@ -46,12 +49,17 @@
 //! The [`Key`] struct represents the information present inside of a `JWK`
 //! (mandatory and optional) as defined by the RFC.
 
+pub mod apple;
+pub mod facebook;
+pub mod google;
 pub mod key;
 #[cfg(test)]
 mod tests;
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
+use chrono::Utc;
 use derivative::*;
 use hyper::Client;
 use hyper_tls::HttpsConnector;
@@ -61,6 +69,12 @@ use jsonwebtoken::TokenData;
 use serde::Deserialize;
 use serde_json::Value;
 
+pub use self::apple::AppleClaims;
+pub use self::apple::APPLE_JWK_URI;
+pub use self::facebook::FacebookClaims;
+pub use self::facebook::FACEBOOK_JWK_URI;
+pub use self::google::GoogleClaims;
+pub use self::google::GOOGLE_JWK_URI;
 use crate::error::Error;
 use crate::key_caches::decrypt;
 use crate::key_caches::remote::key::Key;
@@ -68,13 +82,15 @@ use crate::key_caches::remote::key::KeyType;
 use crate::key_caches::remote::key::Use;
 use crate::prelude;
 
+type Cache = BTreeMap<String, (Key, DecodingKey)>;
+
 /// A refreshable key cache for remote keys used for JWT authentication.
 ///
 /// The `URI` of the target is stored and the corresponding keys are fetched
 /// upon creation.
 ///
-/// One can then decode tokens presumably signed by the target by calling
-/// [`decode`](`RemoteCache::decode`).
+/// One can then decrypt tokens presumably signed by the target by calling
+/// [`decrypt`](`RemoteCache::decrypt`).
 /// If the token was indeed provisioned by the target, this operation will be
 /// successful. Otherwise, it will fail.
 ///
@@ -96,7 +112,7 @@ use crate::prelude;
 /// let key_store = RemoteCache::new(uri).await?;
 ///
 /// let token = "a.b.c";
-/// let claims: MyClaims = key_store.decode::<MyClaims>(&token)?;
+/// let claims: MyClaims = key_store.decrypt::<MyClaims>(&token)?;
 /// ```
 ///
 /// Many targets rotate their keys, and as such, cached keys will fail after a
@@ -106,7 +122,7 @@ use crate::prelude;
 /// keys (from its current `uri`).
 ///
 /// For performance considerations, the [`DecodingKey`] is computed (eagerly)
-/// once per key, and not per every call to [`decode`](`RemoteCache::decode`).
+/// once per key, and not per every call to [`decrypt`](`RemoteCache::decrypt`).
 #[derive(Derivative)]
 #[derivative(Hash, PartialEq, Eq)]
 pub struct RemoteCache {
@@ -124,7 +140,13 @@ pub struct RemoteCache {
     /// Two [`RemoteCache`]'s are considered equivalent if and only if their
     /// `uri`'s match.
     #[derivative(PartialEq = "ignore", Hash = "ignore")]
-    pub(crate) keys: BTreeMap<String, (Key, DecodingKey)>,
+    pub(crate) keys: Cache,
+
+    /// The maximum age the [`Key`]s in this [`RemoteCache`] will live for.
+    /// When this time has expired, [`refresh`](`RemoteCache::refresh`) should
+    /// be called to renew the keys.
+    #[derivative(PartialEq = "ignore", Hash = "ignore")]
+    pub(crate) expiry_time: u64,
 }
 
 impl RemoteCache {
@@ -137,10 +159,13 @@ impl RemoteCache {
         String: From<I>,
     {
         let uri = String::from(uri).parse::<http::Uri>()?;
-        let keys = fetch(uri.clone()).await?;
-        // let keys = attach_decoding_keys(keys);
+        let (keys, expiry_time) = fetch(uri.clone()).await?;
 
-        let store = Self { uri, keys };
+        let store = Self {
+            uri,
+            keys,
+            expiry_time,
+        };
 
         Ok(store)
     }
@@ -153,15 +178,15 @@ impl RemoteCache {
     /// [`URI`]: https://docs.rs/http/latest/http/uri/struct.Uri.html
     pub async fn refresh(&mut self) -> prelude::Result<()> {
         let Self { uri, .. } = self;
-        let keys = fetch(uri.clone()).await?;
-        // let keys = attach_decoding_keys(keys);
+        let (keys, expiry_time) = fetch(uri.clone()).await?;
 
         self.keys = keys;
+        self.expiry_time = expiry_time;
 
         Ok(())
     }
 
-    /// Safely decode the given token.
+    /// Safely decrypt the given token.
     ///
     /// Namely, by "safe", I mean that the `exp` time is checked to make sure
     /// that it has *not* elapsed already. In the case that it has, the
@@ -171,9 +196,12 @@ impl RemoteCache {
     /// let remote_cache = RemoteCache::new("https://target.com/certs_service").await?;
     ///
     /// let token = "a.b.c";
-    /// let my_claims: TokenData<MyClaims> = remote_cache.decode(token)?;
+    /// let my_claims: TokenData<MyClaims> = remote_cache.decrypt(token)?;
     /// ```
-    pub fn decode<Claim, I>(
+    ///
+    /// If the cache is stale, this function will return an error (as opposed to
+    /// automatically refreshing it).
+    fn decrypt_cache_expiry_unchecked<Claim, I>(
         &self,
         token: I,
     ) -> prelude::Result<TokenData<Claim>>
@@ -182,6 +210,7 @@ impl RemoteCache {
         Claim: for<'a> Deserialize<'a>,
     {
         let Self { keys, .. } = self;
+
         let selector = |kid: &String| {
             keys.get(&*kid)
                 .ok_or(Error::no_corresponding_kid_in_store)
@@ -189,6 +218,50 @@ impl RemoteCache {
         };
 
         decrypt(token, selector, None)
+    }
+
+    /// Safely decrypt the given token.
+    ///
+    /// Namely, by "safe", I mean that the `exp` time is checked to make sure
+    /// that it has *not* elapsed already. In the case that it has, the
+    /// given token will be rejected.
+    ///
+    /// ```no_run
+    /// let remote_cache = RemoteCache::new("https://target.com/certs_service").await?;
+    ///
+    /// let token = "a.b.c";
+    /// let my_claims: TokenData<MyClaims> = remote_cache.decrypt(token)?;
+    /// ```
+    ///
+    /// However, if the [`RemoteCache`] is stale (i.e., contains keys which have
+    /// expired), then this function will automatically refresh the cache for
+    /// you.
+    ///
+    /// If the [`RemoteCache`] is not stale, however, no network
+    /// request will be performed and the key will be decrypted as it normally
+    /// would be.
+    pub async fn decrypt<Claim, I>(
+        &mut self,
+        token: I,
+        auto_refresh: bool,
+    ) -> prelude::Result<TokenData<Claim>>
+    where
+        String: From<I>,
+        Claim: for<'a> Deserialize<'a>,
+    {
+        let Self { expiry_time, .. } = self;
+
+        let now = Utc::now().timestamp() as u64;
+        let time_comparison = now.cmp(&expiry_time);
+
+        match (time_comparison, auto_refresh) {
+            (Ordering::Less, _) => self.decrypt_cache_expiry_unchecked(token),
+            (_, false) => Err(Error::stale_cache),
+            (_, true) => {
+                self.refresh().await?;
+                self.decrypt_cache_expiry_unchecked(token)
+            },
+        }
     }
 
     /// Get an immutable reference to the inner `uri` used to locate the keys.
@@ -202,13 +275,18 @@ impl RemoteCache {
     }
 
     /// Get an immutable reference to the inner `keys` cache-map.
-    pub fn keys(&self) -> &BTreeMap<String, (Key, DecodingKey)> {
+    pub fn keys(&self) -> &Cache {
         &self.keys
     }
 
     /// Get a mutable reference to the inner `keys` cache-map.
-    pub fn keys_mut(&mut self) -> &mut BTreeMap<String, (Key, DecodingKey)> {
+    pub fn keys_mut(&mut self) -> &mut Cache {
         &mut self.keys
+    }
+
+    /// Get a copy of the `expiry-time` of the keys in this cache.
+    pub fn expiry_time(&self) -> u64 {
+        self.expiry_time
     }
 }
 
@@ -227,12 +305,36 @@ impl RemoteCache {
 /// This function specifically uses the
 /// [`from_rsa_components`](`DecodingKey::from_rsa_components`) function.
 /// This is because we expect that the target is using "RSA" encryption scheme.
-async fn fetch(
-    uri: http::Uri,
-) -> prelude::Result<BTreeMap<String, (Key, DecodingKey)>> {
+///
+/// The expiry time is calculated by taking the max-age (in Unix-Time) and
+/// adding it to the current time (in Unix-Time). 1hr (i.e, 3600s) are
+/// subtracted in order to provide leeway.
+async fn fetch(uri: http::Uri) -> prelude::Result<(Cache, u64)> {
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
     let mut response = client.get(uri).await?;
+
+    let max_ages = response
+        .headers()
+        .get("cache-control")
+        .ok_or(Error::no_cache_control)?
+        .to_str()?
+        .split(",")
+        .filter_map(|value| {
+            let is_max_age_header = value.contains("max-age=");
+            match is_max_age_header {
+                true => {
+                    value.trim().replace("max-age=", "").parse::<u64>().ok()
+                },
+                false => None,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let max_age = *max_ages.first().ok_or(Error::no_max_age)?;
+    let now = Utc::now().timestamp() as u64;
+    let one_hour = 3600;
+    let expiry_time = now + max_age - one_hour;
 
     let bytes = hyper::body::to_bytes(response.body_mut()).await?;
     let bytes = bytes.as_ref();
@@ -280,7 +382,7 @@ async fn fetch(
                     .map(|decoding_key| (kid, (key, decoding_key)))
             })
         })
-        .collect::<BTreeMap<String, (Key, DecodingKey)>>();
+        .collect::<Cache>();
 
-    Ok(keys)
+    Ok((keys, expiry_time))
 }

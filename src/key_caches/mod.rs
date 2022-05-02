@@ -1,3 +1,12 @@
+//! A local or remote `JWK` storage and caching implementation.
+//!
+//! Caching keys and their corresponding [`DecodingKey`] helps in optimizing
+//! performance.
+//!
+//! Namely, your application will not need to continuously fetch keys from a
+//! source and re-compute the corresponding [`DecodingKey`] if the `JWK`s at the
+//! source have not been rotated yet.
+
 use jsonwebtoken::decode;
 use jsonwebtoken::decode_header;
 use jsonwebtoken::Algorithm;
@@ -7,12 +16,19 @@ use jsonwebtoken::TokenData;
 use jsonwebtoken::Validation;
 use serde::Deserialize;
 
+use crate::prelude;
 use crate::prelude::Error;
-use crate::prelude::{self};
 
 pub mod local;
 pub mod remote;
 
+/// Decrypt the given token into it's [`TokenData`] struct.
+///
+/// If the `alg` in the headers is not [`Algorithm::RS256`], or if a `kid` is
+/// not present (or if it is present but the cache does not contain a match),
+/// this function will return an error. Otherwise, the function will return try
+/// to decrypt the data using the [`DecodingKey`] found by calling the call-back
+/// function.
 fn decrypt<'b, Claims, I, F>(
     token: I,
     selector: F,
@@ -39,7 +55,7 @@ where
             "jwt" => Some(()),
             _ => None,
         })
-        .ok_or(Error::unrecognized_jws_type)?;
+        .ok_or(Error::unrecognized_jwt_type)?;
 
     let kid = kid.ok_or(Error::no_kid_present)?;
 

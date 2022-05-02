@@ -72,13 +72,14 @@ impl LocalCache {
 
     pub fn decrypt<Claims, I>(
         &self,
-        token: I,
+        token: &I,
     ) -> prelude::Result<TokenData<Claims>>
     where
-        String: From<I>,
+        String: for<'a> From<&'a I>,
         Claims: for<'de> Deserialize<'de>,
     {
         let Self { algorithm, keys } = self;
+
         let selector = |kid: &String| {
             let kid = Uuid::from_str(&*kid)?;
             let x = keys
@@ -87,9 +88,10 @@ impl LocalCache {
                 .ok_or(Error::no_corresponding_kid_in_store);
             x
         };
+
         let validation = Validation::new(*algorithm);
 
-        decrypt::<Claims, I, _>(token, selector, Some(validation))
+        decrypt(token, selector, Some(validation))
     }
 
     pub fn keys(&self) -> &BTreeMap<Uuid, (EncodingKey, DecodingKey)> {
