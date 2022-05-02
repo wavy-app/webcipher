@@ -47,8 +47,6 @@ where
         _ => Err(Error::invalid_algorithm)?,
     };
 
-    let validation = validation.unwrap_or(Validation::new(alg));
-
     let _ = typ
         .map(|typ| typ.to_lowercase())
         .and_then(|typ| match &*typ {
@@ -58,7 +56,7 @@ where
         .ok_or(Error::unrecognized_jwt_type)?;
 
     let kid = kid.ok_or(Error::no_kid_present)?;
-
+    let validation = validation.unwrap_or(Validation::new(alg));
     let decoding_key = selector(&kid)?;
 
     let claim = decode(&token, decoding_key, &validation)?;
