@@ -7,7 +7,7 @@ This struct caches all keys for various OAuth2 service providers, such as `Googl
 Public keys can be stored internally, and `JWT` tokens can be decrypted by its according `OAuth2` provider.
 
 ### Third Party Auth Providers
-An example of using a `KeyRegistry` instance to decode (and verify) an incoming `JWT` can be seen below:
+An example of using a `KeyRegistry` instance to decrypt (and verify) an incoming `JWT` can be seen below:
 ```rust
 enum ThirdPartyAuthProviders {
     Google,
@@ -20,12 +20,12 @@ let registry = KeyRegistry::builder()
     .finish()
     .await?;
 
-// Now assume that we receive some token that we wish to decode.
+// Now assume that we receive some token that we wish to decrypt.
 // Furthermore, let's assume that the token is claimed to be signed by `Google`.
 // The claims made by `Google` are located in some arbitrary struct named `GoogleClaims` (defined elsewhere).
 let received_jwt_token = "a.b.c";
 
-let data: jsonwebtoken::TokenData<GoogleClaims> = registry.decode_remote::<GoogleClaims>(ThirdPartyAuthProviders::Google)?;
+let data: jsonwebtoken::TokenData<GoogleClaims> = registry.decrypt_remote::<GoogleClaims>(ThirdPartyAuthProviders::Google)?;
 
 let jsonwebtoken::TokenData { claims: GoogleClaims { /* access to all of Google's claims! */ .. }, .. } = data;
 ```
@@ -59,12 +59,12 @@ let decoding_key = DecodingKey::from_rsa_pem(bytes);
 let registry = KeyRegistry::builder()
     .add_local(jsonwebtoken::Algorithm::RS256, encoding_key, decoding_key);
 
-// Once again, assume that we receive some token that we wish to decode.
+// Once again, assume that we receive some token that we wish to decrypt.
 // Furthermore, let's assume that the token is claimed to be signed by us!
 // The claims we made are located in some arbitrary struct named `OurClaims`.
 let received_jwt_token = "a.b.c";
 
-let data: jsonwebtoken::TokenData<OurClaims> = registry.decode_local::<OurClaims>()?;
+let data: jsonwebtoken::TokenData<OurClaims> = registry.decrypt_local::<OurClaims>()?;
 
 let jsonwebtoken::TokenData { claims: OurClaims { /* access to all of our claims! */ .. }, .. } = data;
 ```

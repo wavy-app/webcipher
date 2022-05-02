@@ -55,7 +55,7 @@ where
             "jwt" => Some(()),
             _ => None,
         })
-        .ok_or(Error::unrecognized_jws_type)?;
+        .ok_or(Error::unrecognized_jwt_type)?;
 
     let kid = kid.ok_or(Error::no_kid_present)?;
 
