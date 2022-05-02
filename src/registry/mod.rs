@@ -18,6 +18,7 @@
 //! - `Google`
 //!
 //! ```no_run
+//! #[derive(PartialEq, Eq, PartialOrd, Ord)]
 //! enum Tpas {
 //!     Google,
 //!     Facebook,
@@ -39,6 +40,11 @@
 //!
 //! let TokenData { claims: GoogleClaims { .. }, .. } =  key_registry.decrypt::<GoogleClaims, _>(tpa, token, auto_refresh).await?;
 //! ```
+//!
+//! Note that the `Tpas` struct must implement [`PartialEq`], [`Eq`],
+//! [`PartialOrd`], and [`Ord`].
+//! This is because, internally, the [`KeyRegistry`] struct represents the
+//! collection of [`RemoteCache`]s by a [`BTreeMap`].
 
 pub mod builder;
 
@@ -48,6 +54,7 @@ use jsonwebtoken::TokenData;
 use prelude::Error;
 use serde::Deserialize;
 
+pub use self::builder::KeyRegistryBuilder;
 use crate::key_caches::remote::RemoteCache;
 use crate::prelude;
 
@@ -93,12 +100,12 @@ impl<Tpa> KeyRegistry<Tpa>
 where
     Tpa: Ord,
 {
-    /// Get an immutable reference to the inner [`RemoteCaches`].
+    /// Get an immutable reference to the inner `remote_caches` field.
     pub fn remote_caches(&self) -> &RemoteCaches<Tpa> {
         &self.remote_caches
     }
 
-    /// Get a mutable reference to the inner [`RemoteCaches`].
+    /// Get a mutable reference to the inner `remote_caches` field.
     pub fn remote_caches_mut(&mut self) -> &mut RemoteCaches<Tpa> {
         &mut self.remote_caches
     }
