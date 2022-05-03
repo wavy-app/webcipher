@@ -53,7 +53,7 @@ where
             "jwt" => Some(()),
             _ => None,
         })
-        .ok_or(Error::unrecognized_jwt_type)?;
+        .ok_or(Error::unrecognized_typ)?;
 
     let kid = kid.ok_or(Error::no_kid_present)?;
     let validation = validation.unwrap_or(Validation::new(alg));
