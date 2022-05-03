@@ -30,15 +30,25 @@
 //! let facebooks_jwks_url = "https://...";
 //! let apples_jwks_url = "https://...";
 //!
-//! let mut remote_cache_google = RemoteCache::new(googles_jwks_url).await?;
-//! let mut remote_cache_facebook = RemoteCache::new(facebooks_jwks_url).await?;
-//! let mut remote_cache_apple = RemoteCache::new(apples_jwks_url).await?;
+//! let mut remote_cache_google = RemoteCache::new(googles_jwks_url)?;
+//! let mut remote_cache_facebook = RemoteCache::new(facebooks_jwks_url)?;
+//! let mut remote_cache_apple = RemoteCache::new(apples_jwks_url)?;
+//!
+//! // Upon instantiation, caches will *always* be stale.
+//! // Therefore, you need to refresh them first!
+//!
+//! remote_cache_google.refresh().await?;
+//! remote_cache_facebook.refresh().await?;
+//! remote_cache_apple.refresh().await?;
+//!
+//! // Now assume that an arbitrary amount of time has passed!
+//! // We don't know if the keys inside the cache are still valid...
 //!
 //! // Incoming token to be verified!
 //! // Token is claimed to be signed by `Google`!
 //! let token = "a.b.c";
 //!
-//! // check to make sure the cache is fresh...
+//! // Check to make sure the cache is fresh...
 //! let is_fresh = remote_cache_google.is_fresh();
 //!
 //! // If the cache is *not* fresh, refresh it!
@@ -46,7 +56,7 @@
 //!     remote_cache.refresh().await?;
 //! };
 //!
-//! // decrypt the incoming token!
+//! // Decrypt the incoming token!
 //! let jsonwebtoken::TokenData { claims: GoogleClaims { .. }, .. } = remote_cache_google.decrypt_unchecked::<GoogleClaims, _>(token)?;
 //! ```
 //!

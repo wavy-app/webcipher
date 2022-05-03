@@ -8,12 +8,18 @@ use crate::prelude::GOOGLE_JWK_URI;
 ///
 /// This will ensure that the [`fetch`] function works too.
 async fn test_creation() {
-    let uri = FACEBOOK_JWK_URI;
-    let _ = RemoteCache::new(uri).await.unwrap();
+    let uris = vec![
+        FACEBOOK_JWK_URI,
+        GOOGLE_JWK_URI,
+        APPLE_JWK_URI,
+    ];
 
-    let uri = APPLE_JWK_URI;
-    let _ = RemoteCache::new(uri).await.unwrap();
+    for uri in uris {
+        let mut remote_cache = RemoteCache::new(uri).unwrap();
 
-    let uri = GOOGLE_JWK_URI;
-    let _ = RemoteCache::new(uri).await.unwrap();
+        let is_fresh = remote_cache.is_cache_fresh();
+        assert!(!is_fresh);
+
+        remote_cache.refresh().await.unwrap();
+    };
 }

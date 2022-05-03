@@ -10,7 +10,8 @@ use crate::prelude::Error;
 /// If we see anything else, we reject it.
 async fn test_fail_invalid_algorithm() {
     let uri = "https://www.googleapis.com/oauth2/v2/certs";
-    let remote_cache = RemoteCache::new(uri).await.unwrap();
+    let mut remote_cache = RemoteCache::new(uri).unwrap();
+    remote_cache.refresh().await.unwrap();
 
     #[derive(Deserialize, Debug)]
     struct GoogleClaims;
@@ -33,7 +34,8 @@ async fn test_fail_invalid_algorithm() {
 /// The given token has the correct `alg`, but no `kid`.
 async fn test_fail_no_kid() {
     let uri = "https://www.googleapis.com/oauth2/v2/certs";
-    let remote_cache = RemoteCache::new(uri).await.unwrap();
+    let mut remote_cache = RemoteCache::new(uri).unwrap();
+    remote_cache.refresh().await.unwrap();
 
     #[derive(Deserialize, Debug)]
     struct GoogleClaims;
@@ -57,7 +59,8 @@ async fn test_fail_no_kid() {
 /// Therefore, a lookup for a matching `kid` value will fail.
 async fn test_fail_no_corresponding_kid() {
     let uri = "https://www.facebook.com/.well-known/oauth/openid/jwks/";
-    let remote_cache = RemoteCache::new(uri).await.unwrap();
+    let mut remote_cache = RemoteCache::new(uri).unwrap();
+    remote_cache.refresh().await.unwrap();
 
     #[derive(Deserialize, Debug)]
     struct GoogleClaims;
@@ -76,7 +79,8 @@ async fn test_fail_no_corresponding_kid() {
 /// containing a valid `alg` and a valid `kid` but is an invalid signature.
 async fn test_fail_decryption() {
     let uri = "https://www.facebook.com/.well-known/oauth/openid/jwks/";
-    let remote_cache = RemoteCache::new(uri).await.unwrap();
+    let mut remote_cache = RemoteCache::new(uri).unwrap();
+    remote_cache.refresh().await.unwrap();
 
     #[derive(Deserialize, Debug)]
     struct GoogleClaims;
@@ -94,7 +98,8 @@ async fn test_fail_decryption() {
 #[tokio::test]
 async fn test() {
     let uri = "https://www.googleapis.com/oauth2/v2/certs";
-    let remote_cache = RemoteCache::new(uri).await.unwrap();
+    let mut remote_cache = RemoteCache::new(uri).unwrap();
+    remote_cache.refresh().await.unwrap();
 
     #[derive(Deserialize, Debug)]
     struct GoogleClaims {}
