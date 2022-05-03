@@ -146,7 +146,7 @@ pub struct RemoteCache {
     /// When this time has expired, [`refresh`](`RemoteCache::refresh`) should
     /// be called to renew the keys.
     #[derivative(PartialEq = "ignore", Hash = "ignore")]
-    pub(crate) expiry_time: u64,
+    pub(crate) expiry_time: Option<u64>,
 }
 
 impl RemoteCache {
@@ -201,7 +201,7 @@ impl RemoteCache {
     ///
     /// If the cache is stale, this function will return an error (as opposed to
     /// automatically refreshing it).
-    fn decrypt_cache_expiry_unchecked<Claim, I>(
+    fn decrypt_raw<Claim, I>(
         &self,
         token: I,
     ) -> prelude::Result<TokenData<Claim>>
@@ -251,15 +251,17 @@ impl RemoteCache {
     {
         let Self { expiry_time, .. } = self;
 
-        let now = Utc::now().timestamp() as u64;
-        let time_comparison = now.cmp(&expiry_time);
+        let time_comparison = expiry_time.map(|expiry_time| {
+            let now = Utc::now().timestamp() as u64;
+            now.cmp(&expiry_time)
+        }).unwrap_or(Ordering::Greater);
 
         match (time_comparison, auto_refresh) {
-            (Ordering::Less, _) => self.decrypt_cache_expiry_unchecked(token),
+            (Ordering::Less, _) => self.decrypt_raw(token),
             (_, false) => Err(Error::stale_cache),
             (_, true) => {
                 self.refresh().await?;
-                self.decrypt_cache_expiry_unchecked(token)
+                self.decrypt_raw(token)
             },
         }
     }
@@ -284,9 +286,14 @@ impl RemoteCache {
         &mut self.keys
     }
 
-    /// Get a copy of the `expiry-time` of the keys in this cache.
-    pub fn expiry_time(&self) -> u64 {
-        self.expiry_time
+    /// Get an immutable reference to the inner `expiry-time` of the keys in this cache.
+    pub fn expiry_time(&self) -> &Option<u64> {
+        &self.expiry_time
+    }
+
+    /// Get a mutable reference to the inner `expiry-time` of the keys in this cache.
+    pub fn expiry_time_mut(&mut self) -> &mut Option<u64> {
+        &mut self.expiry_time
     }
 }
 
@@ -309,7 +316,7 @@ impl RemoteCache {
 /// The expiry time is calculated by taking the max-age (in Unix-Time) and
 /// adding it to the current time (in Unix-Time). 1hr (i.e, 3600s) are
 /// subtracted in order to provide leeway.
-async fn fetch(uri: http::Uri) -> prelude::Result<(Cache, u64)> {
+async fn fetch(uri: http::Uri) -> prelude::Result<(Cache, Option<u64>)> {
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
     let mut response = client.get(uri).await?;
@@ -331,10 +338,12 @@ async fn fetch(uri: http::Uri) -> prelude::Result<(Cache, u64)> {
         })
         .collect::<Vec<_>>();
 
-    let max_age = *max_ages.first().ok_or(Error::no_max_age)?;
-    let now = Utc::now().timestamp() as u64;
-    let one_hour = 3600;
-    let expiry_time = now + max_age - one_hour;
+    let expiry_time = max_ages.first()
+        .map(|max_age| {
+            let now = Utc::now().timestamp() as u64;
+            let one_hour = 3600;
+            now + max_age - one_hour
+        });
 
     let bytes = hyper::body::to_bytes(response.body_mut()).await?;
     let bytes = bytes.as_ref();
