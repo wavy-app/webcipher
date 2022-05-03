@@ -200,9 +200,11 @@ impl RemoteCache {
     /// ```
     ///
     /// ### Warning:
-    /// If the cache is stale (i.e., contains `JWK`s that are expired), this function will produce undefined behaviour.
+    /// If the cache is stale (i.e., contains `JWK`s that are expired), this
+    /// function will produce undefined behaviour.
     ///
-    /// Please check the cache is fresh by calling [`is_cache_fresh`](`RemoteCache::is_cache_fresh`).
+    /// Please check the cache is fresh by calling
+    /// [`is_cache_fresh`](`RemoteCache::is_cache_fresh`).
     pub fn decrypt_unchecked<Claim, I>(
         &self,
         token: I,
@@ -227,11 +229,15 @@ impl RemoteCache {
     /// By "fresh", we mean that the `JWK`s have not expired yet.
     ///
     /// ### Note
-    /// Certain `OAuth2` providers don't necessarily inform clients on how long their `JWK`s should be cached for.
-    /// For example, `Apple` provides no information on when their public keys are going to be rotated.
+    /// Certain `OAuth2` providers don't necessarily inform clients on how long
+    /// their `JWK`s should be cached for. For example, `Apple` provides no
+    /// information on when their public keys are going to be rotated.
     ///
-    /// If this is the case, `expiry_time` will be set to [`None`] and [`is_cache_fresh`](`RemoteCache::is_cache_fresh`) will always return `false`.
-    /// Therefore, you should *always* call [`refresh`](`RemoteCache::refresh`) before decrypting using [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`).
+    /// If this is the case, `expiry_time` will be set to [`None`] and
+    /// [`is_cache_fresh`](`RemoteCache::is_cache_fresh`) will always return
+    /// `false`. Therefore, you should *always* call
+    /// [`refresh`](`RemoteCache::refresh`) before decrypting using
+    /// [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`).
     ///
     /// ```no_run
     /// // Assume `target.com` provides no `cache-control` header in their `http` response.
@@ -248,7 +254,8 @@ impl RemoteCache {
     /// let TokenData { claims: MyClaims { .. }, .. } = remote_cache.decrypt_unchecked::<MyClaims, _>(token)?;
     /// ```
     ///
-    /// If you somehow know the actual expiry time of the keys, you can always mutably set the `expiry-time` manually.
+    /// If you somehow know the actual expiry time of the keys, you can always
+    /// mutably set the `expiry-time` manually.
     ///
     /// ```no_run
     /// // Once again, assume `target.com` provides no `cache-control` header in their `http` response.
