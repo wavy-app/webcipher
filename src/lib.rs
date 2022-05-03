@@ -1,6 +1,5 @@
 pub mod error;
 pub mod key_caches;
-pub mod registry;
 
 pub mod prelude {
     //! Convenience re-exports for when working with this crate.
