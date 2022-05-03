@@ -9,12 +9,12 @@
 //! ```
 //!
 //! Validation of a signed `JWT` is simply done by calling the
-//! [`decrypt`](`RemoteCache::decrypt`) function.
+//! [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`) function.
 //!
 //! ```no_run
 //! let token = "a.b.c";
 //! let claims: jsonwebtoken::TokenData<MyClaims>=
-//! remote_cache.decrypt::<MyClaims>(token)?;
+//! remote_cache.decrypt_unchecked::<MyClaims>(token)?;
 //! ```
 //!
 //! The fetched keys will be stored, as well as their expiry times.
@@ -27,14 +27,14 @@
 //! let token1 = "a.b.c";
 //! // this will not perform a network request
 //! let claims1: jsonwebtoken::TokenData<MyClaims> =
-//! remote_cache.decrypt::<MyClaims>(token)?;
+//! remote_cache.decrypt_unchecked::<MyClaims>(token)?;
 //!
-//! // perform an arbitrary number of calls to decrypt...
+//! // perform an arbitrary number of calls to decrypt_unchecked...
 //!
 //! let token_n = "e.f.g";
 //! // this will also not perform a network request
 //! let claims_n: jsonwebtoken::TokenData<MyClaims>=
-//! remote_cache.decrypt::<MyClaims>(token)?;
+//! remote_cache.decrypt_unchecked::<MyClaims>(token)?;
 //!
 //! // this will perform a network request
 //! remote_cache.refresh().await?;
@@ -90,7 +90,7 @@ type Cache = BTreeMap<String, (Key, DecodingKey)>;
 /// upon creation.
 ///
 /// One can then decrypt tokens presumably signed by the target by calling
-/// [`decrypt`](`RemoteCache::decrypt`).
+/// [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`).
 /// If the token was indeed provisioned by the target, this operation will be
 /// successful. Otherwise, it will fail.
 ///
@@ -112,7 +112,7 @@ type Cache = BTreeMap<String, (Key, DecodingKey)>;
 /// let key_store = RemoteCache::new(uri).await?;
 ///
 /// let token = "a.b.c";
-/// let claims: MyClaims = key_store.decrypt::<MyClaims>(&token)?;
+/// let claims: MyClaims = key_store.decrypt_unchecked::<MyClaims>(&token)?;
 /// ```
 ///
 /// Many targets rotate their keys, and as such, cached keys will fail after a
@@ -122,7 +122,7 @@ type Cache = BTreeMap<String, (Key, DecodingKey)>;
 /// keys (from its current `uri`).
 ///
 /// For performance considerations, the [`DecodingKey`] is computed (eagerly)
-/// once per key, and not per every call to [`decrypt`](`RemoteCache::decrypt`).
+/// once per key, and not per every call to [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`).
 #[derive(Derivative)]
 #[derivative(Hash, PartialEq, Eq)]
 pub struct RemoteCache {
@@ -196,7 +196,7 @@ impl RemoteCache {
     /// let remote_cache = RemoteCache::new("https://target.com/certs_service").await?;
     ///
     /// let token = "a.b.c";
-    /// let my_claims: TokenData<MyClaims> = remote_cache.decrypt(token)?;
+    /// let my_claims: TokenData<MyClaims> = remote_cache.decrypt_unchecked(token)?;
     /// ```
     ///
     /// ### Warning:
