@@ -40,3 +40,6 @@ uuid = { version = "0.8.2", features = ["v4", "serde"] }
 
 # time utilities + primitives
 chrono = "0.4.19"
+
+# (fast) random number generator
+fastrand = "1.7.0"

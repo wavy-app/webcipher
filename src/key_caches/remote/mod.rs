@@ -225,7 +225,7 @@ impl RemoteCache {
                 .map(|(_, decoding_key)| decoding_key)
         };
 
-        decrypt(token, selector, None)
+        decrypt(token, selector, None, true)
     }
 
     /// Check to see if the keys in this [`RemoteCache`] instance are fresh.

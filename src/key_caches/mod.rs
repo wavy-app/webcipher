@@ -33,6 +33,7 @@ fn decrypt<'b, Claims, I, F>(
     token: I,
     selector: F,
     validation: Option<Validation>,
+    rs256_alg_required: bool,
 ) -> prelude::Result<TokenData<Claims>>
 where
     String: From<I>,
@@ -42,9 +43,9 @@ where
     let token: String = token.into();
     let Header { typ, alg, kid, .. } = decode_header(&token)?;
 
-    match alg {
-        Algorithm::RS256 => (),
-        _ => Err(Error::invalid_algorithm)?,
+    match (rs256_alg_required, alg) {
+        (true, Algorithm::RS256) | (false, _) => (),
+        (true, _) => Err(Error::invalid_algorithm)?,
     };
 
     let _ = typ
