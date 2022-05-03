@@ -122,7 +122,8 @@ type Cache = BTreeMap<String, (Key, DecodingKey)>;
 /// keys (from its current `uri`).
 ///
 /// For performance considerations, the [`DecodingKey`] is computed (eagerly)
-/// once per key, and not per every call to [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`).
+/// once per key, and not per every call to
+/// [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`).
 #[derive(Derivative)]
 #[derivative(Hash, PartialEq, Eq)]
 pub struct RemoteCache {
@@ -344,28 +345,41 @@ async fn fetch(uri: http::Uri) -> prelude::Result<(Cache, Option<u64>)> {
     let client = Client::builder().build::<_, hyper::Body>(https);
     let mut response = client.get(uri).await?;
 
-    let max_ages = response
-        .headers()
-        .get("cache-control")
-        .ok_or(Error::no_cache_control)?
-        .to_str()?
-        .split(",")
-        .filter_map(|value| {
-            let is_max_age_header = value.contains("max-age=");
-            match is_max_age_header {
-                true => {
-                    value.trim().replace("max-age=", "").parse::<u64>().ok()
-                },
-                false => None,
-            }
-        })
-        .collect::<Vec<_>>();
+    const CACHE_HEADER: &'static str = "cache-control";
+    const MAX_AGE_HEADER: &'static str = "max-age=";
 
-    let expiry_time = max_ages.first().map(|max_age| {
-        let now = Utc::now().timestamp() as u64;
-        let one_hour = 3600;
-        now + max_age - one_hour
-    });
+    let expiry_time = response
+        .headers()
+        .get(CACHE_HEADER)
+        .map(|value| {
+            value.to_str().map(|value| {
+                value
+                    .split(',')
+                    .filter_map(|segment| {
+                        let is_max_age_header =
+                            segment.contains(MAX_AGE_HEADER);
+                        match is_max_age_header {
+                            true => value
+                                .trim()
+                                .replace(MAX_AGE_HEADER, "")
+                                .parse::<u64>()
+                                .ok()
+                                .map(|max_age| {
+                                    let now = Utc::now().timestamp() as u64;
+                                    let one_hour = 3600;
+
+                                    now + max_age - one_hour
+                                }),
+                            false => None,
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .get(0)
+                    .map(u64::clone)
+            })
+        })
+        .transpose()?
+        .flatten();
 
     let bytes = hyper::body::to_bytes(response.body_mut()).await?;
     let bytes = bytes.as_ref();

@@ -1,3 +1,2 @@
-mod decrypt;
-mod decrypt_cache_expiry_unchecked;
+mod decrypt_unchecked;
 mod new;
