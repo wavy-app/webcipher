@@ -87,11 +87,11 @@ impl LocalCache {
 
     pub fn decrypt<Claims, I>(
         &self,
-        token: &I,
+        token: I,
         validate_exp: bool,
     ) -> prelude::Result<TokenData<Claims>>
     where
-        String: for<'a> From<&'a I>,
+        String: From<I>,
         Claims: for<'de> Deserialize<'de>,
     {
         let Self { algorithm, keys } = self;
