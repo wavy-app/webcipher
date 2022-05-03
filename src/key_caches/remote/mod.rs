@@ -21,10 +21,13 @@
 //! This can greatly improve performance by avoiding duplicate calls.
 //! ```no_run
 //! let uri = "https://example_target.com/certs_service";
+//! let mut remote_cache = RemoteCache::new(target_uri)?;
+//!
 //! // this will perform a network request
-//! let mut remote_cache = RemoteCache::new(target_uri).await?;
+//! remote_cache.refresh().await?;
 //!
 //! let token1 = "a.b.c";
+//!
 //! // this will not perform a network request
 //! let claims1: jsonwebtoken::TokenData<MyClaims> =
 //! remote_cache.decrypt_unchecked::<MyClaims>(token)?;
@@ -32,6 +35,7 @@
 //! // perform an arbitrary number of calls to decrypt_unchecked...
 //!
 //! let token_n = "e.f.g";
+//!
 //! // this will also not perform a network request
 //! let claims_n: jsonwebtoken::TokenData<MyClaims>=
 //! remote_cache.decrypt_unchecked::<MyClaims>(token)?;
@@ -112,7 +116,7 @@ type Cache = BTreeMap<String, (Key, DecodingKey)>;
 /// let key_store = RemoteCache::new(uri).await?;
 ///
 /// let token = "a.b.c";
-/// let claims: MyClaims = key_store.decrypt_unchecked::<MyClaims>(&token)?;
+/// let claims: TokenData { claims: MyClaims { .. }, .. } = key_store.decrypt_unchecked::<MyClaims>(&token)?;
 /// ```
 ///
 /// Many targets rotate their keys, and as such, cached keys will fail after a
@@ -152,15 +156,14 @@ pub struct RemoteCache {
 
 impl RemoteCache {
     /// Generate a new [`RemoteCache`] by asynchronously fetching the keys at
-    /// the given [`URI`].
-    ///
-    /// [`URI`]: https://docs.rs/http/latest/http/uri/struct.Uri.html
-    pub async fn new<I>(uri: I) -> prelude::Result<Self>
+    /// the given [`http::Uri`].
+    pub fn new<I>(uri: I) -> prelude::Result<Self>
     where
         String: From<I>,
     {
         let uri = String::from(uri).parse::<http::Uri>()?;
-        let (keys, expiry_time) = fetch(uri.clone()).await?;
+        let keys = BTreeMap::default();
+        let expiry_time = None;
 
         let store = Self {
             uri,
@@ -262,7 +265,8 @@ impl RemoteCache {
     /// // Once again, assume `target.com` provides no `cache-control` header in their `http` response.
     /// // Therefore, it will be assumed that the cache is always stale.
     /// let uri = "https://target.com/api/certs";
-    /// let mut remote_cache = RemoteCache::new(uri).await?;
+    /// let mut remote_cache = RemoteCache::new(uri)?;
+    /// remote_cache.refresh().await?;
     ///
     /// // However, you somehow know that the keys are always rotated every 4hrs.
     /// let now = Utc::now().timestamp() as u64;
