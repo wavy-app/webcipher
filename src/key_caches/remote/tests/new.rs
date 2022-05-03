@@ -1,4 +1,7 @@
-use crate::{key_caches::remote::RemoteCache, prelude::{FACEBOOK_JWK_URI, GOOGLE_JWK_URI, APPLE_JWK_URI}};
+use crate::key_caches::remote::RemoteCache;
+use crate::prelude::APPLE_JWK_URI;
+use crate::prelude::FACEBOOK_JWK_URI;
+use crate::prelude::GOOGLE_JWK_URI;
 
 #[tokio::test]
 /// Test basic creation of the [`RemoteCache`].

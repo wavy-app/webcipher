@@ -188,9 +188,9 @@ impl RemoteCache {
 
     /// Safely decrypt the given token.
     ///
-    /// Namely, by "safe", I mean that the `exp` time is checked to make sure
-    /// that it has *not* elapsed already. In the case that it has, the
-    /// given token will be rejected.
+    /// Namely, by "safe", we mean that the `exp` time of the `JWT` is checked
+    /// to make sure that it has *not* elapsed already. In the case that it
+    /// has, the given token will be rejected.
     ///
     /// ```no_run
     /// let remote_cache = RemoteCache::new("https://target.com/certs_service").await?;
@@ -199,9 +199,11 @@ impl RemoteCache {
     /// let my_claims: TokenData<MyClaims> = remote_cache.decrypt(token)?;
     /// ```
     ///
-    /// If the cache is stale, this function will return an error (as opposed to
-    /// automatically refreshing it).
-    fn decrypt_raw<Claim, I>(
+    /// ### Warning:
+    /// If the cache is stale (i.e., contains `JWK`s that are expired), this function will produce undefined behaviour.
+    ///
+    /// Please check the cache is fresh by calling [`is_cache_fresh`](`RemoteCache::is_cache_fresh`).
+    pub fn decrypt_unchecked<Claim, I>(
         &self,
         token: I,
     ) -> prelude::Result<TokenData<Claim>>
@@ -220,50 +222,62 @@ impl RemoteCache {
         decrypt(token, selector, None)
     }
 
-    /// Safely decrypt the given token.
+    /// Check to see if the keys in this [`RemoteCache`] instance are fresh.
     ///
-    /// Namely, by "safe", I mean that the `exp` time is checked to make sure
-    /// that it has *not* elapsed already. In the case that it has, the
-    /// given token will be rejected.
+    /// By "fresh", we mean that the `JWK`s have not expired yet.
+    ///
+    /// ### Note
+    /// Certain `OAuth2` providers don't necessarily inform clients on how long their `JWK`s should be cached for.
+    /// For example, `Apple` provides no information on when their public keys are going to be rotated.
+    ///
+    /// If this is the case, `expiry_time` will be set to [`None`] and [`is_cache_fresh`](`RemoteCache::is_cache_fresh`) will always return `false`.
+    /// Therefore, you should *always* call [`refresh`](`RemoteCache::refresh`) before decrypting using [`decrypt_unchecked`](`RemoteCache::decrypt_unchecked`).
     ///
     /// ```no_run
-    /// let remote_cache = RemoteCache::new("https://target.com/certs_service").await?;
+    /// // Assume `target.com` provides no `cache-control` header in their `http` response.
+    /// // Therefore, it will be assumed that the cache is always stale.
+    /// let uri = "https://target.com/api/certs";
+    /// let mut remote_cache = RemoteCache::new(uri).await?;
+    ///
+    /// // an arbitrary amount of time passes...
     ///
     /// let token = "a.b.c";
-    /// let my_claims: TokenData<MyClaims> = remote_cache.decrypt(token)?;
+    ///
+    /// // Call refresh first!
+    /// remote_cache.refresh();
+    /// let TokenData { claims: MyClaims { .. }, .. } = remote_cache.decrypt_unchecked::<MyClaims, _>(token)?;
     /// ```
     ///
-    /// However, if the [`RemoteCache`] is stale (i.e., contains keys which have
-    /// expired), then this function will automatically refresh the cache for
-    /// you.
+    /// If you somehow know the actual expiry time of the keys, you can always mutably set the `expiry-time` manually.
     ///
-    /// If the [`RemoteCache`] is not stale, however, no network
-    /// request will be performed and the key will be decrypted as it normally
-    /// would be.
-    pub async fn decrypt<Claim, I>(
-        &mut self,
-        token: I,
-        auto_refresh: bool,
-    ) -> prelude::Result<TokenData<Claim>>
-    where
-        String: From<I>,
-        Claim: for<'a> Deserialize<'a>,
-    {
+    /// ```no_run
+    /// // Once again, assume `target.com` provides no `cache-control` header in their `http` response.
+    /// // Therefore, it will be assumed that the cache is always stale.
+    /// let uri = "https://target.com/api/certs";
+    /// let mut remote_cache = RemoteCache::new(uri).await?;
+    ///
+    /// // However, you somehow know that the keys are always rotated every 4hrs.
+    /// let now = Utc::now().timestamp() as u64;
+    /// let four_hours = 3600u64 * 4u64;
+    /// let real_expiry_time = now + four_hours;
+    ///
+    /// let expiry_time = remote_cache.expiry_time_mut();
+    /// *expiry_time = Some(real_expiry_time);
+    /// ```
+    pub fn is_cache_fresh(&self) -> bool {
         let Self { expiry_time, .. } = self;
 
-        let time_comparison = expiry_time.map(|expiry_time| {
-            let now = Utc::now().timestamp() as u64;
-            now.cmp(&expiry_time)
-        }).unwrap_or(Ordering::Greater);
+        expiry_time
+            .map(|expiry_time| {
+                let now = Utc::now().timestamp() as u64;
+                let time_comparison = now.cmp(&expiry_time);
 
-        match (time_comparison, auto_refresh) {
-            (Ordering::Less, _) => self.decrypt_raw(token),
-            (_, false) => Err(Error::stale_cache),
-            (_, true) => {
-                self.refresh().await?;
-                self.decrypt_raw(token)
-            },
-        }
+                match time_comparison {
+                    Ordering::Less => true,
+                    Ordering::Equal | Ordering::Greater => false,
+                }
+            })
+            .unwrap_or(false)
     }
 
     /// Get an immutable reference to the inner `uri` used to locate the keys.
@@ -286,12 +300,14 @@ impl RemoteCache {
         &mut self.keys
     }
 
-    /// Get an immutable reference to the inner `expiry-time` of the keys in this cache.
+    /// Get an immutable reference to the inner `expiry-time` of the keys in
+    /// this cache.
     pub fn expiry_time(&self) -> &Option<u64> {
         &self.expiry_time
     }
 
-    /// Get a mutable reference to the inner `expiry-time` of the keys in this cache.
+    /// Get a mutable reference to the inner `expiry-time` of the keys in this
+    /// cache.
     pub fn expiry_time_mut(&mut self) -> &mut Option<u64> {
         &mut self.expiry_time
     }
@@ -338,12 +354,11 @@ async fn fetch(uri: http::Uri) -> prelude::Result<(Cache, Option<u64>)> {
         })
         .collect::<Vec<_>>();
 
-    let expiry_time = max_ages.first()
-        .map(|max_age| {
-            let now = Utc::now().timestamp() as u64;
-            let one_hour = 3600;
-            now + max_age - one_hour
-        });
+    let expiry_time = max_ages.first().map(|max_age| {
+        let now = Utc::now().timestamp() as u64;
+        let one_hour = 3600;
+        now + max_age - one_hour
+    });
 
     let bytes = hyper::body::to_bytes(response.body_mut()).await?;
     let bytes = bytes.as_ref();
