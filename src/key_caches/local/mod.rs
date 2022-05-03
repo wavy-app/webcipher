@@ -39,10 +39,17 @@ impl LocalCache {
     ) -> Uuid {
         let Self { keys, .. } = self;
         let kid = Uuid::new_v4();
-
         let _ = keys.insert(kid, (encoding_key, decoding_key));
 
         kid
+    }
+
+    pub fn remove_key(
+        &mut self,
+        kid: Uuid,
+    ) {
+        let Self { keys, .. } = self;
+        keys.remove(&kid);
     }
 
     pub fn encrypt<Claims>(&self, claims: Claims) -> prelude::Result<String>
@@ -51,13 +58,21 @@ impl LocalCache {
     {
         let Self { algorithm, keys } = self;
 
+        let length = keys.len();
+        let rand_index = match length {
+            0 => 0,
+            _ => fastrand::usize(..length),
+        };
+
         let kid = *keys
             .keys()
             .collect::<Vec<_>>()
-            .get(0)
+            .get(rand_index)
             .ok_or(Error::no_corresponding_kid_in_store)?;
+
         let (encoding_key, _) =
             keys.get(&kid).ok_or(Error::no_corresponding_kid_in_store)?;
+
         let header = Header {
             alg: *algorithm,
             typ: Some("JWT".into()),
@@ -73,6 +88,7 @@ impl LocalCache {
     pub fn decrypt<Claims, I>(
         &self,
         token: &I,
+        validate_exp: bool,
     ) -> prelude::Result<TokenData<Claims>>
     where
         String: for<'a> From<&'a I>,
@@ -89,9 +105,10 @@ impl LocalCache {
             x
         };
 
-        let validation = Validation::new(*algorithm);
+        let mut validation = Validation::new(*algorithm);
+        validation.validate_exp = validate_exp;
 
-        decrypt(token, selector, Some(validation))
+        decrypt(token, selector, Some(validation), false)
     }
 
     pub fn keys(&self) -> &BTreeMap<Uuid, (EncodingKey, DecodingKey)> {
