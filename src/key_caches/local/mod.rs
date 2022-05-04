@@ -40,8 +40,6 @@ impl LocalCache {
     ) {
         let Self { keys, .. } = self;
         let _ = keys.insert(kid, (encoding_key, decoding_key));
-
-        kid
     }
 
     pub fn remove_key(
