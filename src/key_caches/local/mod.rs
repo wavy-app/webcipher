@@ -34,11 +34,11 @@ impl LocalCache {
 
     pub fn add_key(
         &mut self,
+        kid: Uuid,
         encoding_key: EncodingKey,
         decoding_key: DecodingKey,
-    ) -> Uuid {
+    ) {
         let Self { keys, .. } = self;
-        let kid = Uuid::new_v4();
         let _ = keys.insert(kid, (encoding_key, decoding_key));
 
         kid
