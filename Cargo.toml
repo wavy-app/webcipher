@@ -43,3 +43,6 @@ chrono = "0.4.19"
 
 # (fast) random number generator
 fastrand = "1.7.0"
+
+# std::fmt::Display derive macros
+derive_more = "0.99.17"
