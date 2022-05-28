@@ -64,7 +64,7 @@
 //! [`crate::key_caches::remote::RemoteCache`] expects the `JWK`s to use the
 //! `RSA` family of cryptographic algorithms.
 
-extern crate jsonwebtoken;
+pub extern crate jsonwebtoken;
 
 pub mod error;
 pub mod key_caches;

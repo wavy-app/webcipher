@@ -1,6 +1,6 @@
 [package]
 name = "webcipher"
-version = "1.0.1"
+version = "1.0.2"
 authors = [
     "Raunak Bhagat <rabhagat31@gmail.com>"
 ]
