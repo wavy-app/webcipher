@@ -90,12 +90,20 @@ async fn test_fail_decryption() {
         .decrypt_unchecked::<GoogleClaims, _>(token)
         .unwrap_err();
 
-    assert_eq!(err, Error::unable_to_verify_token {
-        message: "InvalidSignature".into()
-    });
+    match err {
+        Error::unable_to_verify_token(e) => {
+            let kind = e.kind();
+            match kind {
+                jsonwebtoken::errors::ErrorKind::InvalidSignature => (),
+                _ => panic!(),
+            }
+        },
+        _ => panic!(),
+    }
 }
 
 #[tokio::test]
+#[ignore = "Time-sensitive test. Will pass until this key has expired."]
 async fn test() {
     let uri = "https://www.googleapis.com/oauth2/v2/certs";
     let mut remote_cache = RemoteCache::new(uri).unwrap();

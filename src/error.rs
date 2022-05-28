@@ -40,9 +40,9 @@ pub enum Error {
         message: String,
     },
 
-    unable_to_verify_token {
-        message: String,
-    },
+    unable_to_verify_token(
+        jsonwebtoken::errors::Error,
+    ),
 
     /// The `typ` field inside of the received `JWT` *must* have the value of
     /// "JWT". Any other values will raise an error.
@@ -109,9 +109,7 @@ impl From<http::uri::InvalidUri> for Error {
 
 impl From<jsonwebtoken::errors::Error> for Error {
     fn from(e: jsonwebtoken::errors::Error) -> Self {
-        Self::unable_to_verify_token {
-            message: e.to_string(),
-        }
+        Self::unable_to_verify_token(e)
     }
 }
 
